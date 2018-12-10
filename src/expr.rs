@@ -8,13 +8,16 @@
 
 use std::ops::Sub;
 use std::borrow::Borrow;
+use std::convert::Into;
 
 use knowledge_base as kbase;
 use subst;
+use formula;
 
 use self::kbase::ContextBase;
 use subst::Info as SInfo;
 use formed::Info as FInfo;
+use Ptr;
 
 /// Type representing the identifier for composite expressions.
 pub type CompName = String;
@@ -29,7 +32,7 @@ pub enum Expr {
 /// Singular expressions.
 #[derive(Clone, PartialEq)]
 pub enum Singular {
-	Head(Box<SeqVar>),
+	Head(Ptr<SeqVar>),
 	Composite(CompName, Vec<Expr>),
 	Lambda(Lambda),
 	LambdaSeq(LambdaSeq),
@@ -37,7 +40,8 @@ pub enum Singular {
 	LambdaSeqInst(LambdaSeqInst),
 	Const(Const),
 	Free(Free),
-	Arb(Arb)
+	Arb(Arb),
+	Formula(Ptr<formula::Formula>),
 }
 
 /// The types of names that can be used for constants. Uses strings for
@@ -66,7 +70,7 @@ pub struct Const(pub ConstName);
 pub enum SeqVar {
 	Free(FreeSeq),
 	Arb(ArbSeq),
-	Tail(Box<SeqVar>),
+	Tail(Ptr<SeqVar>),
 	Const(SeqConst),
 	List(Vec<Singular>)
 }
@@ -98,7 +102,7 @@ pub struct SeqConst {
 /// primarily used for function definition axioms and so forth.
 #[derive(Clone, PartialEq)]
 pub struct Lambda<T: Clone + PartialEq = Free> {
-	form: Box<Singular>, 
+	form: Ptr<Singular>, 
 	var: T
 }
 pub type LambdaSeq = Lambda<FreeSeq>;
@@ -112,7 +116,7 @@ where
 	E: Clone + PartialEq,
 {
 	lambda: Lambda<T>, 
-	sub: Box<E>
+	sub: Ptr<E>
 }
 
 pub type LambdaSeqInst = LambdaInst<FreeSeq, SeqVar>;
@@ -158,8 +162,35 @@ impl Expr {
 	}
 }
 
+impl Into<Expr> for String {
+	fn into(self) -> Expr {
+		Singular::Const(Const::from_string(self)).to_expr()
+	}
+}
+
+impl Into<Expr> for &'static str {
+	fn into(self) -> Expr {
+		Singular::Const(Const::from_str(self)).to_expr()
+	}
+}
+
 impl Singular {
-	pub fn to_expr(&self) -> Expr {
+	pub fn arb_str(name: &str) -> Singular {
+		let cname = ConstName::from_str(name);
+		Singular::Arb(Arb(cname))
+	}
+
+	pub fn free_str(name: &str) -> Singular {
+		let cname = ConstName::from_str(name);
+		Singular::Free(Free(cname))
+	}
+
+	pub fn const_str(name: &str) -> Singular {
+		let cname = ConstName::from_str(name);
+		Singular::Const(Const(cname))
+	}
+
+	pub fn to_expr(self) -> Expr {
 		Expr::Singular(self.clone())
 	}
 
@@ -167,7 +198,7 @@ impl Singular {
 		match self {
 			Singular::Head(b) => match b.expand() {
 				Ok(l) => l.first().unwrap().clone(),
-				Err(a) => Singular::Head(Box::new(a))
+				Err(a) => Singular::Head(Ptr::new(a))
 			},
 			a@Singular::Const(_) => a.clone(),
 			Singular::Composite(s, l) => Singular::Composite(
@@ -179,6 +210,7 @@ impl Singular {
 			Singular::LambdaSeqInst(l) => Singular::LambdaSeqInst(l.expand()),
 			a@Singular::Free(_) => a.clone(),
 			a@Singular::Arb(_) => a.clone(),
+			Singular::Formula(f) => Singular::Formula(f.expand().ptr()),
 		}
 	}
 	
@@ -200,6 +232,7 @@ impl Singular {
 			Singular::LambdaSeqInst(l) => l.well_formed(info),
 			Singular::Free(name) => info.has_free(name),
 			Singular::Arb(name) => info.has_arb(name),
+			Singular::Formula(f) => f.well_formed(info),
 		}
 	}
 
@@ -218,6 +251,7 @@ impl Singular {
 			Singular::LambdaSeqInst(ref l) => l.max_sub_index(),
 			Singular::Free(ref l) => l.max_sub_index(),
 			Singular::Arb(ref l) => l.max_sub_index(),
+			Singular::Formula(f) => f.max_sub_index(),
 		}
 	}
 
@@ -235,14 +269,26 @@ impl Singular {
 			Singular::LambdaSeqInst(l) => Singular::LambdaSeqInst(l.substitute(info)),
 			Singular::Free(f) => info.substitute(f),
 			a@Singular::Arb(_) => a.clone(),
+			Singular::Formula(f) => Singular::Formula(f.substitute(info).ptr()),
 		}
 	}
 
-	pub fn ptr(self) -> Box<Singular> {
-		Box::new(self)
+	pub fn ptr(self) -> Ptr<Singular> {
+		Ptr::new(self)
 	}
 }
 
+impl Into<Singular> for String {
+	fn into(self) -> Singular {
+		Singular::Const(Const::from_string(self))
+	}
+}
+
+impl Into<Singular> for &'static str {
+	fn into(self) -> Singular {
+		Singular::Const(Const::from_str(self))
+	}
+}
 
 impl SeqConst {
 	pub fn new(name: ConstName, arity: usize) -> SeqConst {
@@ -250,6 +296,31 @@ impl SeqConst {
 			name: name,
 			arity: arity
 		}
+	}
+
+	pub fn from_cname(name: ConstName, arity: usize) -> SeqConst {
+		SeqConst {
+			name: name,
+			arity: arity
+		}
+	}
+
+	pub fn from_string(name: String, arity: usize) -> SeqConst {
+		SeqConst {
+			name: ConstName::from_string(name),
+			arity: arity
+		}
+	}
+
+	pub fn from_str(name: &str, arity: usize) -> SeqConst {
+		SeqConst {
+			name: ConstName::from_str(name),
+			arity: arity
+		}
+	}
+
+	pub fn to_seq(self) -> SeqVar {
+		SeqVar::Const(self)
 	}
 
 	pub fn replace_with(&self, i: usize) -> SeqConst {
@@ -267,6 +338,17 @@ impl SeqConst {
 	}
 }
 
+impl Into<SeqConst> for (String, usize) {
+	fn into(self) -> SeqConst {
+		SeqConst::from_string(self.0, self.1)
+	}
+}
+
+impl Into<SeqConst> for (&'static str, usize) {
+	fn into(self) -> SeqConst {
+		SeqConst::from_str(self.0, self.1)
+	}
+}
 
 impl ConstName {
 	pub fn replace_with(&self, i: usize) -> ConstName {
@@ -274,6 +356,9 @@ impl ConstName {
 	}
 
 	pub fn from_int(i: usize) -> ConstName { ConstName::Subbed(i) }
+
+	pub fn from_string(i: String) -> ConstName { ConstName::String(i) }
+	pub fn from_str(i: &str) -> ConstName { ConstName::String(i.to_string()) }
 
 	pub fn max_sub_index(&self) -> usize {
 		match self {
@@ -295,6 +380,13 @@ impl ConstName {
 	}
 }
 
+impl Into<ConstName> for String {
+	fn into(self) -> ConstName { ConstName::from_string(self) }
+}
+
+impl Into<ConstName> for &'static str {
+	fn into(self) -> ConstName { ConstName::from_str(self) }
+}
 
 impl Arity {
 	pub fn is_defined(&self) -> bool {
@@ -317,12 +409,61 @@ impl Sub<usize> for Arity {
 }
 
 impl Arb {
+	pub fn from_string(name: String) -> Arb {
+		Arb(ConstName::from_string(name))
+	}
+
+	pub fn from_str(name: &str) -> Arb {
+		Arb(ConstName::from_str(name))
+	}
+
+	pub fn from_cname(name: ConstName) -> Arb {
+		Arb(name)
+	}
+
 	pub fn max_sub_index(&self) -> usize {
 		self.0.max_sub_index()
 	}	
+
+	pub fn to_singular(self) -> Singular {
+		Singular::Arb(self)
+	}
+}
+
+impl Into<Arb> for String {
+	fn into(self) -> Arb {
+		Arb::from_string(self)
+	}
+}
+
+impl Into<Arb> for &'static str {
+	fn into(self) -> Arb {
+		Arb::from_str(self)
+	}
 }
 
 impl ArbSeq {
+	pub fn from_cname(name: ConstName, arity: usize) -> ArbSeq {
+		ArbSeq {
+			name: name,
+			arity: arity
+		}
+	}
+
+	pub fn from_string(name: String, arity: usize) -> ArbSeq {
+		ArbSeq {
+			name: ConstName::from_string(name),
+			arity: arity
+		}
+	}
+
+	pub fn from_str(name: &str, arity: usize) -> ArbSeq {
+		ArbSeq {
+			name: ConstName::from_str(name),
+			arity: arity
+		}
+	}
+
 	pub fn to_seq(self) -> SeqVar {
 		SeqVar::Arb(self)
 	}
@@ -332,10 +473,52 @@ impl ArbSeq {
 	}
 }
 
+impl Into<ArbSeq> for (String, usize) {
+	fn into(self) -> ArbSeq { ArbSeq::from_string(self.0, self.1) }
+}
+
+impl Into<ArbSeq> for (&'static str, usize) {
+	fn into(self) -> ArbSeq { ArbSeq::from_str(self.0, self.1) }
+}
+
 impl SeqVar {
 
-	pub fn ptr(self) -> Box<SeqVar> {
-		Box::new(self)
+	pub fn free_str(name: &str, arity: usize) -> SeqVar {
+		SeqVar::Free(
+			FreeSeq { name: ConstName::from_str(name), arity: arity })
+	}
+
+	pub fn arb_str(name: &str, arity: usize) -> SeqVar {
+		SeqVar::Arb(
+			ArbSeq { name: ConstName::from_str(name), arity: arity })
+	}
+
+	pub fn const_str(name: &str, arity: usize) -> SeqVar {
+		SeqVar::Const(
+			SeqConst { name: ConstName::from_str(name), arity: arity })
+	}
+
+	pub fn free_string(name: String, arity: usize) -> SeqVar {
+		SeqVar::Free(
+			FreeSeq { name: ConstName::from_string(name), arity: arity })
+	}
+
+	pub fn arb_string(name: String, arity: usize) -> SeqVar {
+		SeqVar::Arb(
+			ArbSeq { name: ConstName::from_string(name), arity: arity })
+	}
+
+	pub fn const_string(name: String, arity: usize) -> SeqVar {
+		SeqVar::Const(
+			SeqConst { name: ConstName::from_string(name), arity: arity })
+	}
+
+	pub fn ptr(self) -> Ptr<SeqVar> {
+		Ptr::new(self)
+	}
+
+	pub fn to_expr(self) -> Expr {
+		Expr::Seq(self)
 	}
 
 	pub fn max_sub_index(&self) -> usize {
@@ -381,7 +564,7 @@ impl SeqVar {
 			a@SeqVar::Const(_) => a.clone(),
 			SeqVar::Free(f) => info.substitute_seq(f),
 			a@SeqVar::Arb(_) => a.clone(),
-			SeqVar::Tail(t) => SeqVar::Tail(Box::new(t.substitute(info))),
+			SeqVar::Tail(t) => SeqVar::Tail(Ptr::new(t.substitute(info))),
 		}
 	}
 
@@ -398,7 +581,41 @@ impl SeqVar {
 	}
 }
 
+impl Into<SeqVar> for (String, usize) {
+	fn into(self) -> SeqVar {
+		SeqVar::const_string(self.0, self.1)
+	}
+}
+
+impl Into<SeqVar> for (&'static str, usize) {
+	fn into(self) -> SeqVar {
+		SeqVar::const_str(self.0, self.1)
+	}
+}
+
+
 impl FreeSeq {
+	pub fn from_cname(name: ConstName, arity: usize) -> FreeSeq {
+		FreeSeq {
+			name: name,
+			arity: arity
+		}
+	}
+
+	pub fn from_string(name: String, arity: usize) -> FreeSeq {
+		FreeSeq {
+			name: ConstName::from_string(name),
+			arity: arity
+		}
+	}
+
+	pub fn from_str(name: &str, arity: usize) -> FreeSeq {
+		FreeSeq {
+			name: ConstName::from_str(name),
+			arity: arity
+		}
+	}
+
 	pub fn replace_with(&self, i: usize) -> FreeSeq {
 		FreeSeq {
 			name: ConstName::Subbed(i),
@@ -406,19 +623,46 @@ impl FreeSeq {
 		}
 	}
 
+	pub fn to_seq(self) -> SeqVar {
+		SeqVar::Free(self)
+	}
+
 	pub fn max_sub_index(&self) -> usize {
 		self.name.max_sub_index()
 	}
+
+
 }
+
+
+impl Into<FreeSeq> for (String, usize) {
+	fn into(self) -> FreeSeq {
+		FreeSeq::from_string(self.0, self.1)
+	}
+}
+
+impl Into<FreeSeq> for (&'static str, usize) {
+	fn into(self) -> FreeSeq {
+		FreeSeq::from_str(self.0, self.1)
+	}
+}
+
 
 impl Free {
 	pub fn max_sub_index(&self) -> usize {
 		self.0.max_sub_index()
 	}
 
+	pub fn from_cname(s: ConstName) -> Free {
+		Free(s)
+	}
 	
 	pub fn from_string(s: String) -> Free {
 		Free(ConstName::String(s))
+	}
+
+	pub fn from_str(s: &str) -> Free {
+		Free(ConstName::String(s.to_string()))
 	}
 
 	pub fn from_int(i: usize) -> Free {
@@ -428,6 +672,18 @@ impl Free {
 	pub fn from_name(name: ConstName) -> Free {
 		Free(name)
 	}
+
+	pub fn to_singular(self) -> Singular {
+		Singular::Free(self)
+	}
+}
+
+impl Into<Free> for String {
+	fn into(self) -> Free { Free::from_string(self) }
+}
+
+impl Into<Free> for &'static str {
+	fn into(self) -> Free { Free::from_str(self) }
 }
 
 impl Const {
@@ -443,27 +699,51 @@ impl Const {
 		Const(ConstName::String(s))
 	}
 
+	pub fn from_str(s: &str) -> Const {
+		Const(ConstName::from_str(s))
+	}
+
 	pub fn from_int(i: usize) -> Const {
 		Const(ConstName::Subbed(i))
 	}
 
-	pub fn from_name(name: ConstName) -> Const {
+	pub fn from_cname(name: ConstName) -> Const {
 		Const(name)
 	}
 }
 
+impl Into<Const> for String {
+	fn into(self) -> Const {
+		Const::from_string(self)
+	}
+}
+
+impl Into<Const> for &'static str {
+	fn into(self) -> Const {
+		Const::from_str(self)
+	}
+}
+
+impl PartialEq<String> for Const {
+	fn eq(&self, rhs: &String) -> bool {
+		match self {
+			Const(ConstName::String(s)) => PartialEq::eq(s, rhs),
+			_ => false
+		}
+	}
+}
 
 impl Lambda {	
 	fn expand(&self) -> Lambda {
 		Lambda {
-			form: Box::new(self.form.expand()),
+			form: Ptr::new(self.form.expand()),
 			var: self.var.clone()
 		}
 	}
 
 	pub fn new(form: Singular, var: Free) -> Lambda {
 		Lambda {
-			form: Box::new(form),
+			form: Ptr::new(form),
 			var: var
 		}
 	}
@@ -493,14 +773,14 @@ impl LambdaSeq {
 
 	fn expand(&self) -> LambdaSeq {
 		LambdaSeq {
-			form: Box::new(self.form.expand()),
+			form: Ptr::new(self.form.expand()),
 			var: self.var.clone()
 		}
 	}
 
 	pub fn new(form: Singular, var: FreeSeq) -> LambdaSeq {
 		LambdaSeq {
-			form: Box::new(form),
+			form: Ptr::new(form),
 			var: var
 		}
 	}
@@ -560,7 +840,7 @@ impl LambdaInst {
 	fn expand(&self) -> LambdaInst {
 		LambdaInst {
 			lambda: self.lambda.expand(),
-			sub: Box::new(self.sub.expand())
+			sub: Ptr::new(self.sub.expand())
 		}
 	}
 
@@ -576,13 +856,27 @@ impl LambdaInst {
 	pub fn substitute(&self, info: &SInfo) -> LambdaInst {
 		LambdaInst{
 			lambda: self.lambda.substitute(info), 
-			sub: Box::new(self.sub.substitute(info))
+			sub: Ptr::new(self.sub.substitute(info))
+		}
+	}
+
+	pub fn new(l: Lambda, s: Singular) -> LambdaInst {
+		LambdaInst {
+			lambda: l,
+			sub: Ptr::new(s)
 		}
 	}
 }
 
 
 impl LambdaSeqInst {
+
+	pub fn new(l: LambdaSeq, s: SeqVar) -> LambdaSeqInst {
+		LambdaSeqInst {
+			lambda: l,
+			sub: Ptr::new(s)
+		}
+	}
 
 	pub fn extract(&self) -> Singular {
 		let info = subst::Expr::Seq(
@@ -612,7 +906,7 @@ impl LambdaSeqInst {
 	-> LambdaSeqInst {
 		LambdaSeqInst{
 			lambda: self.lambda.substitute(info), 
-			sub: Box::new(self.sub.substitute(info))
+			sub: Ptr::new(self.sub.substitute(info))
 		}
 	}
 }

@@ -88,6 +88,30 @@ impl <K: KnowledgeBase> ResultBase<K> {
 		}
 	}
 
+	/// Returns the kbase with the given constant removed.
+	pub fn remove_const(&self, name: &String) -> ResultBase<K> {
+		match self {
+			ResultBase::Root(_) => self.clone(),
+			ResultBase::Formula(f, k) => 
+				ResultBase::Formula(f.clone(), k.remove_const(name).ptr()),
+			ResultBase::FormPtr(f, k) => 
+				ResultBase::FormPtr(f.clone(), k.remove_const(name).ptr()),
+			ResultBase::Const(c, k) => if PartialEq::eq(c, name) {
+				k.remove_const(name)
+			} else {
+				ResultBase::Const(c.clone(), k.remove_const(name).ptr())
+			},
+			ResultBase::SeqConst(s, k) => 
+				ResultBase::SeqConst(s.clone(), k.remove_const(name).ptr()),
+			ResultBase::Arb(a, k) => 
+				ResultBase::Arb(a.clone(), k.remove_const(name).ptr()),
+			ResultBase::ArbSeq(a, k) => 
+				ResultBase::ArbSeq(a.clone(), k.remove_const(name).ptr()),
+			ResultBase::ArbForm(a, k) => 
+				ResultBase::ArbForm(a.clone(), k.remove_const(name).ptr()),
+		}
+	}
+
 	/// Wraps this object in a pointer type.
 	pub fn ptr(&self) -> KBasePtr<ResultBase<K>> { 
 		Arc::new(self.clone()) 

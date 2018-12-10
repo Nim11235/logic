@@ -1,16 +1,17 @@
+use std::ops::Deref;
+use std::convert::Into;
+
 use expr;
 use subst;
 use knowledge_base as kbase;
 
+use Ptr;
 use self::kbase::ContextBase;
 use subst::Info as SInfo;
 use subst::Expr as EInfo;
 use formed::Info as FInfo;
 
-use std::sync::Arc;
-use std::ops::Deref;
-
-pub type FormPtr = Arc<Formula>;
+pub type FormPtr = Ptr<Formula>;
 
 #[derive(Clone, PartialEq)]
 pub enum Formula {
@@ -33,135 +34,6 @@ pub enum Formula {
 	Eq(Eq),
 }
 
-impl Formula {
-	pub fn from_name(name: FormName) -> Formula {
-		Formula::Free(Free::new(name))
-	}
-
-	pub fn from_int(i: usize) -> Formula {
-		Formula::Free(Free::new(FormName::from_int(i)))
-	}
-
-	pub fn expand(&self) -> Formula {
-		match self {
-			Formula::True         => Formula::True,
-			Formula::False        => Formula::False,
-			Formula::IFF(f)       => Formula::IFF(f.expand()),
-			Formula::Relation(f)  => Formula::Relation(f.expand()),
-			Formula::And(f)       => Formula::And(f.expand()),
-			Formula::Or(f)        => Formula::Or(f.expand()),
-			Formula::Not(f)       => Formula::Not(f.expand()),
-			Formula::Implies(f)   => Formula::Implies(f.expand()),
-			Formula::ExpSubst(f)  => Formula::ExpSubst(f.expand()),
-			Formula::FormSubst(f) => Formula::FormSubst(f.expand()),
-			Formula::ForAllSeq(f) => Formula::ForAllSeq(f.expand()),
-			Formula::ForAll(f)    => Formula::ForAll(f.expand()),
-			Formula::Exists(f)    => Formula::Exists(f.expand()),
-			Formula::Free(f)      => Formula::Free(f.expand()),
-			Formula::Schema(f)    => Formula::Schema(f.expand()),
-			Formula::Eq(f)        => Formula::Eq(f.expand()),
-			Formula::Arb(f)      => Formula::Arb(f.expand()),
-		}
-	}
-
-	pub fn substitute(&self, info: &SInfo) -> Formula {
-		match self {
-			Formula::True         => Formula::True,
-			Formula::False        => Formula::False,
-			Formula::IFF(f)       => Formula::IFF(f.substitute(info)),
-			Formula::Relation(f)  => Formula::Relation(f.substitute(info)),
-			Formula::And(f)       => Formula::And(f.substitute(info)),
-			Formula::Or(f)        => Formula::Or(f.substitute(info)),
-			Formula::Not(f)       => Formula::Not(f.substitute(info)),
-			Formula::Implies(f)   => Formula::Implies(f.substitute(info)),
-			Formula::ExpSubst(f)  => Formula::ExpSubst(f.substitute(info)),
-			Formula::FormSubst(f) => Formula::FormSubst(f.substitute(info)),
-			Formula::ForAllSeq(f) => Formula::ForAllSeq(f.substitute(info)),
-			Formula::ForAll(f)    => Formula::ForAll(f.substitute(info)),
-			Formula::Exists(f)    => Formula::Exists(f.substitute(info)),
-			Formula::Free(f)      => f.substitute(info),
-			Formula::Arb(f)      => f.substitute(info),
-			Formula::Schema(f)    => Formula::Schema(f.substitute(info)),
-			Formula::Eq(f)        => Formula::Eq(f.substitute(info)),
-		}
-	}
-
-	pub fn well_formed<'a, K: ContextBase>(&self, info: &FInfo<'a, K>) 
-			-> bool {
-		match self {
-			Formula::True         => true,
-			Formula::False        => true,
-			Formula::IFF(f)       => f.well_formed(info),
-			Formula::Relation(f)  => f.well_formed(info),
-			Formula::And(f)       => f.well_formed(info),
-			Formula::Or(f)        => f.well_formed(info),
-			Formula::Not(f)       => f.well_formed(info),
-			Formula::Implies(f)   => f.well_formed(info),
-			Formula::ExpSubst(f)  => f.well_formed(info),
-			Formula::FormSubst(f) => f.well_formed(info),
-			Formula::ForAllSeq(f) => f.well_formed(info),
-			Formula::ForAll(f)    => f.well_formed(info),
-			Formula::Exists(f)    => f.well_formed(info),
-			Formula::Free(f)      => f.well_formed(info),
-			Formula::Arb(f)      => f.well_formed(info),
-			Formula::Schema(f)    => f.well_formed(info),
-			Formula::Eq(f)        => f.well_formed(info),
-		}
-	}
-
-	pub fn max_sub_index(&self) -> usize {
-		match self {
-			Formula::True         => 0,
-			Formula::False        => 0,
-			Formula::IFF(f)       => f.max_sub_index(),
-			Formula::Relation(f)  => f.max_sub_index(),
-			Formula::And(f)       => f.max_sub_index(),
-			Formula::Or(f)        => f.max_sub_index(),
-			Formula::Not(f)       => f.max_sub_index(),
-			Formula::Implies(f)   => f.max_sub_index(),
-			Formula::ExpSubst(f)  => f.max_sub_index(),
-			Formula::FormSubst(f) => f.max_sub_index(),
-			Formula::ForAllSeq(f) => f.max_sub_index(),
-			Formula::ForAll(f)    => f.max_sub_index(),
-			Formula::Exists(f)    => f.max_sub_index(),
-			Formula::Free(f)      => f.max_sub_index(),
-			Formula::Arb(f)      => f.max_sub_index(),
-			Formula::Schema(f)    => f.max_sub_index(),
-			Formula::Eq(f)        => f.max_sub_index(),
-		}
-	}
-
-	pub fn max_form_sub_index(&self) -> usize {
-		match self {
-			Formula::True         => 0,
-			Formula::False        => 0,
-			Formula::IFF(f)       => f.max_form_sub_index(),
-			Formula::Relation(f)  => f.max_form_sub_index(),
-			Formula::And(f)       => f.max_form_sub_index(),
-			Formula::Or(f)        => f.max_form_sub_index(),
-			Formula::Not(f)       => f.max_form_sub_index(),
-			Formula::Implies(f)   => f.max_form_sub_index(),
-			Formula::ExpSubst(f)  => f.max_form_sub_index(),
-			Formula::FormSubst(f) => f.max_form_sub_index(),
-			Formula::ForAllSeq(f) => f.max_form_sub_index(),
-			Formula::ForAll(f)    => f.max_form_sub_index(),
-			Formula::Exists(f)    => f.max_form_sub_index(),
-			Formula::Free(f)      => f.max_form_sub_index(),
-			Formula::Arb(f)      => f.max_form_sub_index(),
-			Formula::Schema(f)    => f.max_form_sub_index(),
-			Formula::Eq(f)        => f.max_form_sub_index(),
-		}
-	}
-
-	pub fn ptr(self) -> FormPtr {
-		Arc::new(self)
-	}
-}
-
-
-
-
-
 #[derive(Clone, PartialEq)]
 pub struct Relation(String, Vec<expr::Expr>);
 
@@ -183,7 +55,7 @@ pub struct Schema {
 	pub form: FormPtr
 }
 #[derive(Clone, PartialEq)]
-pub struct Eq(expr::Singular, expr::Singular);
+pub struct Eq(pub expr::Singular, pub expr::Singular);
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum FormName {
@@ -223,12 +95,16 @@ macro_rules! bin_string {
 
 macro_rules! binform_impl {
 	($form: ident) => {
+
 		#[derive(Clone, PartialEq)]
 		pub struct $form { pub left: FormPtr, pub right: FormPtr }
 
 		to_form_impl!($form);
 
 		impl $form {
+			pub fn new(left: Formula, right: Formula) -> $form {
+				$form { left: left.ptr(), right: right.ptr() }
+			}
 
 			pub fn expand(&self) -> $form {
 				$form {
@@ -283,6 +159,26 @@ macro_rules! quant_impl {
 		to_form_impl!($quant);
 
 		impl $quant {
+			pub fn from_str(v: &str, form: Formula) -> $quant {
+				$quant {
+					var: expr::Free::from_str(v),
+					form: form.ptr()
+				}
+			}
+
+			pub fn from_string(v: String, form: Formula) -> $quant {
+				$quant {
+					var: expr::Free::from_string(v),
+					form: form.ptr()
+				}
+			}
+
+			pub fn from_free(v: expr::Free, form: Formula) -> $quant {
+				$quant {
+					var: v,
+					form: form.ptr()
+				}
+			}
 
 			pub fn expand(&self) -> $quant {
 				$quant {
@@ -341,6 +237,163 @@ to_form_impl!(Eq);
 to_form_impl!(ExpSubst);
 to_form_impl!(FormSubst);
 
+impl Formula {
+	pub fn from_name(name: FormName) -> Formula {
+		Formula::Free(Free::new(name))
+	}
+
+	pub fn from_int(i: usize) -> Formula {
+		Formula::Free(Free::new(FormName::from_int(i)))
+	}
+
+	pub fn to_form(self) -> Formula { self }
+
+	pub fn expand(&self) -> Formula {
+		match self {
+			Formula::True         => Formula::True,
+			Formula::False        => Formula::False,
+			Formula::IFF(f)       => Formula::IFF(f.expand()),
+			Formula::Relation(f)  => Formula::Relation(f.expand()),
+			Formula::And(f)       => Formula::And(f.expand()),
+			Formula::Or(f)        => Formula::Or(f.expand()),
+			Formula::Not(f)       => Formula::Not(f.expand()),
+			Formula::Implies(f)   => Formula::Implies(f.expand()),
+			Formula::ExpSubst(f)  => Formula::ExpSubst(f.expand()),
+			Formula::FormSubst(f) => Formula::FormSubst(f.expand()),
+			Formula::ForAllSeq(f) => Formula::ForAllSeq(f.expand()),
+			Formula::ForAll(f)    => Formula::ForAll(f.expand()),
+			Formula::Exists(f)    => Formula::Exists(f.expand()),
+			Formula::Free(f)      => Formula::Free(f.expand()),
+			Formula::Schema(f)    => Formula::Schema(f.expand()),
+			Formula::Eq(f)        => Formula::Eq(f.expand()),
+			Formula::Arb(f)       => Formula::Arb(f.expand()),
+		}
+	}
+
+	pub fn substitute(&self, info: &SInfo) -> Formula {
+		match self {
+			Formula::True         => Formula::True,
+			Formula::False        => Formula::False,
+			Formula::IFF(f)       => Formula::IFF(f.substitute(info)),
+			Formula::Relation(f)  => Formula::Relation(f.substitute(info)),
+			Formula::And(f)       => Formula::And(f.substitute(info)),
+			Formula::Or(f)        => Formula::Or(f.substitute(info)),
+			Formula::Not(f)       => Formula::Not(f.substitute(info)),
+			Formula::Implies(f)   => Formula::Implies(f.substitute(info)),
+			Formula::ExpSubst(f)  => Formula::ExpSubst(f.substitute(info)),
+			Formula::FormSubst(f) => Formula::FormSubst(f.substitute(info)),
+			Formula::ForAllSeq(f) => Formula::ForAllSeq(f.substitute(info)),
+			Formula::ForAll(f)    => Formula::ForAll(f.substitute(info)),
+			Formula::Exists(f)    => Formula::Exists(f.substitute(info)),
+			Formula::Free(f)      => f.substitute(info),
+			Formula::Arb(f)       => f.substitute(info),
+			Formula::Schema(f)    => Formula::Schema(f.substitute(info)),
+			Formula::Eq(f)        => Formula::Eq(f.substitute(info)),
+		}
+	}
+
+	pub fn well_formed<'a, K: ContextBase>(&self, info: &FInfo<'a, K>) 
+	-> bool {
+		match self {
+			Formula::True         => true,
+			Formula::False        => true,
+			Formula::IFF(f)       => f.well_formed(info),
+			Formula::Relation(f)  => f.well_formed(info),
+			Formula::And(f)       => f.well_formed(info),
+			Formula::Or(f)        => f.well_formed(info),
+			Formula::Not(f)       => f.well_formed(info),
+			Formula::Implies(f)   => f.well_formed(info),
+			Formula::ExpSubst(f)  => f.well_formed(info),
+			Formula::FormSubst(f) => f.well_formed(info),
+			Formula::ForAllSeq(f) => f.well_formed(info),
+			Formula::ForAll(f)    => f.well_formed(info),
+			Formula::Exists(f)    => f.well_formed(info),
+			Formula::Free(f)      => f.well_formed(info),
+			Formula::Arb(f)       => f.well_formed(info),
+			Formula::Schema(f)    => f.well_formed(info),
+			Formula::Eq(f)        => f.well_formed(info),
+		}
+	}
+
+	pub fn max_sub_index(&self) -> usize {
+		match self {
+			Formula::True         => 0,
+			Formula::False        => 0,
+			Formula::IFF(f)       => f.max_sub_index(),
+			Formula::Relation(f)  => f.max_sub_index(),
+			Formula::And(f)       => f.max_sub_index(),
+			Formula::Or(f)        => f.max_sub_index(),
+			Formula::Not(f)       => f.max_sub_index(),
+			Formula::Implies(f)   => f.max_sub_index(),
+			Formula::ExpSubst(f)  => f.max_sub_index(),
+			Formula::FormSubst(f) => f.max_sub_index(),
+			Formula::ForAllSeq(f) => f.max_sub_index(),
+			Formula::ForAll(f)    => f.max_sub_index(),
+			Formula::Exists(f)    => f.max_sub_index(),
+			Formula::Free(f)      => f.max_sub_index(),
+			Formula::Arb(f)       => f.max_sub_index(),
+			Formula::Schema(f)    => f.max_sub_index(),
+			Formula::Eq(f)        => f.max_sub_index(),
+		}
+	}
+
+	pub fn max_form_sub_index(&self) -> usize {
+		match self {
+			Formula::True         => 0,
+			Formula::False        => 0,
+			Formula::IFF(f)       => f.max_form_sub_index(),
+			Formula::Relation(f)  => f.max_form_sub_index(),
+			Formula::And(f)       => f.max_form_sub_index(),
+			Formula::Or(f)        => f.max_form_sub_index(),
+			Formula::Not(f)       => f.max_form_sub_index(),
+			Formula::Implies(f)   => f.max_form_sub_index(),
+			Formula::ExpSubst(f)  => f.max_form_sub_index(),
+			Formula::FormSubst(f) => f.max_form_sub_index(),
+			Formula::ForAllSeq(f) => f.max_form_sub_index(),
+			Formula::ForAll(f)    => f.max_form_sub_index(),
+			Formula::Exists(f)    => f.max_form_sub_index(),
+			Formula::Free(f)      => f.max_form_sub_index(),
+			Formula::Arb(f)       => f.max_form_sub_index(),
+			Formula::Schema(f)    => f.max_form_sub_index(),
+			Formula::Eq(f)        => f.max_form_sub_index(),
+		}
+	}
+
+	pub fn implies(self, other:Formula) -> Formula {
+		Formula::Implies(Implies::new(self, other))
+	}
+
+	pub fn iff(self, other:Formula) -> Formula {
+		Formula::IFF(IFF::new(self, other))
+	}
+
+	pub fn ptr(self) -> FormPtr {
+		Ptr::new(self)
+	}
+}
+
+impl Into<Formula> for bool {
+	fn into(self) -> Formula {
+		if self {
+			Formula::True
+		} else {
+			Formula::False
+		}
+	}
+}
+
+impl Into<expr::Singular> for Formula {
+	fn into(self) -> expr::Singular {
+		expr::Singular::Formula(self.ptr())
+	}
+}
+
+impl Into<expr::Expr> for Formula {
+	fn into(self) -> expr::Expr {
+		expr::Singular::Formula(self.ptr()).to_expr()
+	}
+}
+
 impl subst::Substitute for Formula {
 	fn substitute(&self, info: &SInfo) -> Formula {
 		Formula::substitute(self, info)
@@ -385,9 +438,7 @@ impl ExpSubst {
 	pub fn well_formed<'a, K: ContextBase>(&self, info: &FInfo<'a, K>) 
 	-> bool 
 	{
-		//let form = self.sub.to_const();
 		let k = self.sub.append_finfo(info);
-		//let k = kbase::LinkedBase::Const(&form, kbase);
 		let b2 = self.sub.well_formed(info);
 		let b0 = self.form.well_formed(&k);
 		b0 && b2
@@ -411,6 +462,14 @@ impl FormName {
 		FormName::Subbed(i)
 	}
 
+	pub fn from_str(i: &str) -> FormName {
+		FormName::String(i.to_string())
+	}
+
+	pub fn from_string(i: String) -> FormName {
+		FormName::String(i)
+	}
+
 	pub fn max_form_sub_index(&self) -> usize {
 		match self {
 			&FormName::Subbed(i) => i,
@@ -429,11 +488,32 @@ impl ForAllSeq {
 		ForAllSeq { var: self.var.clone(), form: self.form.expand().ptr() }
 	}
 
-	pub fn new(var: expr::FreeSeq, form: FormPtr) -> ForAllSeq {
+	pub fn new(var: expr::FreeSeq, form: Formula) -> ForAllSeq {
 		ForAllSeq{
 			var: var,
-			form: form
+			form: form.ptr()
 		}
+	}
+
+	pub fn from_str(name: &str, arity: usize, form: Formula) -> ForAllSeq {
+		ForAllSeq{
+			var: expr::FreeSeq::from_str(name, arity),
+			form: form.ptr()
+		}	
+	}
+
+	pub fn from_string(name: String, arity: usize, form: Formula) -> ForAllSeq {
+		ForAllSeq{
+			var: expr::FreeSeq::from_string(name, arity),
+			form: form.ptr()
+		}	
+	}
+
+	pub fn from_free(name: expr::FreeSeq, form: Formula) -> ForAllSeq {
+		ForAllSeq{
+			var: name,
+			form: form.ptr()
+		}	
 	}
 
 	pub fn substitute(&self, info: &SInfo) -> ForAllSeq {
@@ -441,7 +521,7 @@ impl ForAllSeq {
 			self.clone()
 		} else {
 			let (exp, f) = info.chain_seq(self.form.deref(), &self.var);
-			ForAllSeq::new(f, exp.ptr())
+			ForAllSeq::new(f, exp)
 		}
 	}
 
@@ -481,11 +561,11 @@ impl FormSubst {
 		self.form.substitute(&info)
 	}
 
-	pub fn new(form: FormPtr, var: Free, sub: FormPtr) -> FormSubst {
+	pub fn new(form: Formula, var: Free, sub: Formula) -> FormSubst {
 		FormSubst { 
-			form: form, 
+			form: form.ptr(), 
 			var: var, 
-			sub: sub
+			sub: sub.ptr()
 		}
 	}
 
@@ -494,15 +574,13 @@ impl FormSubst {
 			self.clone()
 		} else {
 			let (exp, f) = info.chain_form(&self.form, &self.var);
-			FormSubst::new(exp.ptr(), f, self.sub.substitute(info).ptr())
+			FormSubst::new(exp, f, self.sub.substitute(info))
 		}
 	}
 
 
 	pub fn well_formed<'a, K: ContextBase>(&self, info: &FInfo<'a, K>) 
 	-> bool {
-		//let form = Formula::from_name(self.var.clone());
-		//let k = kbase::LinkedBase::Formula(&form, kbase);
 		let k = info.append_free_form(&self.var);
 		let b2 = self.sub.well_formed(info);
 		let b0 = self.form.well_formed(&k);
@@ -535,10 +613,31 @@ impl Schema {
 		self.form.substitute(&info)
 	}
 
-	pub fn new(fname: Free, form: FormPtr) -> Schema {
+	pub fn new(fname: Free, form: Formula) -> Schema {
 		Schema {
 			var: fname,
-			form: form
+			form: form.ptr()
+		}
+	}
+
+	pub fn from_free(fname: Free, form: Formula) -> Schema {
+		Schema {
+			var: fname,
+			form: form.ptr()
+		}
+	}
+
+	pub fn from_str(fname: &str, form: Formula) -> Schema {
+		Schema {
+			var: Free::from_str(fname),
+			form: form.ptr()
+		}
+	}
+
+	pub fn from_string(fname: String, form: Formula) -> Schema {
+		Schema {
+			var: Free::from_string(fname),
+			form: form.ptr()
 		}
 	}
 
@@ -547,15 +646,13 @@ impl Schema {
 			self.clone()
 		} else {
 			let (exp, f) = info.chain_form(&self.form, &self.var);
-			Schema::new(f, exp.ptr())
+			Schema::new(f, exp)
 		}
 	}
 
 
 	pub fn well_formed<'a, K: ContextBase>(&self, info: &FInfo<'a, K>) 
-			-> bool {
-		//let fform = Formula::Free(Free::new(self.var.clone()));
-		//let k = kbase::LinkedBase::Formula(&fform, kbase);
+	-> bool {
 		let k = info.append_free_form(&self.var);
 		self.form.well_formed(&k)
 	}
@@ -571,6 +668,13 @@ impl Schema {
 
 
 impl Relation {
+	pub fn new(name: String, vars: Vec<expr::Expr>) -> Relation {
+		Relation(name, vars)
+	}
+
+	pub fn to_form(self) -> Formula {
+		Formula::Relation(self)
+	}
 
 	pub fn expand(&self) -> Relation {
 		Relation(self.0.clone(), self.1.iter().flat_map(|x| x.expand()).collect())
@@ -604,6 +708,14 @@ impl Arb {
 
 	pub fn new(fname: FormName) -> Arb { Arb { var: fname } }
 
+	pub fn from_string(fname: String) -> Arb { 
+		Arb { var: FormName::from_string(fname) } 
+	}
+
+	pub fn from_str(fname: &str) -> Arb { 
+		Arb { var: FormName::from_str(fname) } 
+	}
+
 	pub fn substitute(&self, _info: &SInfo)  -> Formula {
 		Formula::Arb(self.clone())
 	}
@@ -625,6 +737,19 @@ impl Arb {
 	}
 }
 
+
+impl Into<Arb> for String {
+	fn into(self) -> Arb {
+		Arb::from_string(self)
+	}
+}
+
+impl Into<Arb> for &'static str {
+	fn into(self) -> Arb {
+		Arb::from_str(self)
+	}
+}
+
 impl Free {
 
 	pub fn expand(&self) -> Free {
@@ -636,6 +761,18 @@ impl Free {
 	}
 
 	pub fn new(fname: FormName) -> Free { Free { var: fname } }
+
+	pub fn from_str(name: &str) -> Free {
+		Free {
+			var: FormName::from_str(name)
+		}
+	}
+
+	pub fn from_string(name: String) -> Free {
+		Free {
+			var: FormName::from_string(name)
+		}
+	}
 
 	pub fn substitute(&self, info: &SInfo)  -> Formula {
 		match info {
@@ -665,7 +802,23 @@ impl Free {
 	}
 }
 
+impl Into<Free> for String {
+	fn into(self) -> Free {
+		Free::from_string(self)
+	}
+}
+
+impl Into<Free> for &'static str {
+	fn into(self) -> Free {
+		Free::from_str(self)
+	}
+}
+
 impl Not {
+
+	pub fn new(f: Formula) -> Not {
+		Not { form: f.ptr() }
+	}
 
 	pub fn expand(&self) -> Not {
 		Not { form: self.form.expand().ptr() }

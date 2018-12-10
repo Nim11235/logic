@@ -1,30 +1,35 @@
+use std::collections::LinkedList;
+use std::ops::Deref;
+use std::sync::Arc;
+
+use Ptr;
 use formula;
 use expr;
 use subst::Expr as EInfo;
 use knowledge_base as kbase;
-use knowledge_base:: {
+use knowledge_base::{
 	KnowledgeBase,
 	ResultBase,
 	ContextBase
 };
 use formed::Info as FInfo;
-use std::collections::LinkedList;
-use std::ops::Deref;
-use std::sync::Arc;
 
-pub type DeductionPtr = Arc<Deduction>;
-pub type Work = Arc<Deduction>;
+/// Reference type for Deductions.
+pub type Work = Ptr<Deduction>;
 
+/// The results from performing a deduction: 
+/// - Ok(resulting knowledgebase)
+/// - Err(The stack of steps and their error messages.)
 pub type DResult<K> = Result<kbase::ResultBase<K>, LinkedList<(Work, String)>>;
 
-
-
+/// Initializes the error stack.
 pub fn err<K>(msg: String, step: Work) -> DResult<K> {
 	let mut l = LinkedList::new();
 	l.push_back((step, msg));
 	Err(l)
 }
 
+/// Appends to the result the ty
 pub fn stack<K>(result: DResult<K>, msg: (Work, String)) -> DResult<K> {
 	match result {
 		Err(mut l) => {
@@ -34,8 +39,6 @@ pub fn stack<K>(result: DResult<K>, msg: (Work, String)) -> DResult<K> {
 		r => r
 	}
 }
-
-
 
 pub enum Deduction {
 	EmptyStep,
@@ -63,11 +66,151 @@ pub enum Deduction {
 	SchemaIntro(SchemaIntro),
 	Sequence(Sequence),
 	Let(Let),
-	//LambdaSubst(LambdaSubst),
 	ExpSubstReduction(ExpSubstReduction),
 	FormSubstReduction(FormSubstReduction),
 	LambdaInstIntro(LambdaInstIntro),
 	LambdaSeqInstIntro(LambdaSeqInstIntro),
+}
+
+#[derive(Clone)]
+pub struct IFFIntro { thm: formula::IFF, w1: Work, w2: Work }
+
+#[derive(Clone)]
+pub struct SubstIntro { thm: formula::ExpSubst, w: Work }
+
+#[derive(Clone)]
+pub struct IFFExtract{ thm: formula::IFF, w: Work }
+#[derive(Clone)]
+pub struct AndIntro { thm: formula::And, w1: Work, w2: Work }
+
+#[derive(Clone)]
+pub struct OrIntro { thm: formula::Or, w1: Work, w2: Work }
+
+#[derive(Clone)]
+pub struct AndExtract {thm: formula::And, w: Work }
+
+#[derive(Clone)]
+pub struct ImplyIntro{ thm: formula::Implies, w: Work }
+
+#[derive(Clone)]
+pub struct ImplyExtract { thm: formula::Implies, w1: Work, w2: Work }
+
+#[derive(Clone)]
+pub struct OrExtract { 
+	thm: formula::Or, 
+	to_thm: formula::FormPtr,
+	w1: Work, 
+	w2: Work, 
+	w3: Work
+}
+#[derive(Clone)]
+pub struct NegationIntro {thm: formula::Not, w: Work }
+
+#[derive(Clone)]
+pub struct NegationExtract { thm: formula::Not, w1: Work, w2: Work }
+
+#[derive(Clone)]
+pub struct EqualityIntro(pub expr::Singular);
+
+#[derive(Clone)]
+pub struct Substitution { 
+	t1: expr::Singular, 
+	t2: expr::Singular,
+	c: expr::Free,
+	form: formula::Formula, 
+	w1: Work, 
+	w2: Work
+}
+
+#[derive(Clone)]
+pub struct ForAllSeqExtract {
+	thm: formula::ForAllSeq,
+	sub: expr::SeqVar,  
+	w: Work
+}
+
+#[derive(Clone)]
+pub struct ForAllExtract{
+	thm: formula::ForAll, 
+	sub: expr::Singular,
+	w: Work
+}
+
+#[derive(Clone)]
+pub struct ForAllSeqIntro {
+	thm: formula::ForAllSeq,
+	letv: expr::ArbSeq,
+	w: Work
+}
+
+#[derive(Clone)]
+pub struct SubstExtract{ thm: formula::ExpSubst, w: Work }
+
+#[derive(Clone)]
+pub struct LambdaSeqInstIntro	{
+	v: expr::Singular,
+	inst: expr::LambdaSeqInst,
+	work: Work
+}
+
+#[derive(Clone)]
+pub struct ForAllIntro {
+	thm: formula::ForAll,
+	letv: expr:: Arb,
+	w: Work
+}
+
+#[derive(Clone)]
+pub struct ExistsIntro {
+	thm: formula::Exists,
+	var: expr::Singular,
+	w: Work
+}
+
+#[derive(Clone)]
+pub struct ExistsExtract {
+	thm: formula::Exists,
+	var: expr::Const,
+	w: Work
+}
+
+#[derive(Clone)]
+pub struct SchemaExtract { 
+	thm: formula::Schema, 
+	form: formula::Formula, 
+	w: Work
+}
+
+#[derive(Clone)]
+pub struct SchemaIntro {
+	thm: formula::Schema,
+	letv: formula::Arb,
+	w: Work
+}
+
+#[derive(Clone)]
+pub struct Sequence(Work, Work);
+
+#[derive(Clone)]
+pub struct Let(String, expr::Singular, Work);
+
+#[derive(Clone)]
+pub struct ExpSubstReduction {
+	thm: formula::ExpSubst, 
+	work: Work
+}
+
+#[derive(Clone)]
+pub struct FormSubstReduction {
+	thm: formula::FormSubst, 
+	work: Work
+}
+
+#[derive(Clone)]
+pub struct LambdaInstIntro	{
+	v: expr::Singular,
+	inst: expr::LambdaInst,
+	work: Work
 }
 
 impl Deduction {
@@ -115,6 +258,8 @@ impl Deduction {
 	pub fn ptr(self) -> Work {
 		Arc::new(self)
 	}
+
+	pub fn to_deduction(self) -> Deduction { self }
 }
 
 macro_rules! impl_to_deduct {
@@ -122,6 +267,9 @@ macro_rules! impl_to_deduct {
 		impl $t {
 			pub fn to_deduction(&self) -> Deduction { 
 				Deduction::$t(Clone::clone(self)) 
+			}
+			pub fn ptr(self) -> Work {
+				Arc::new(self.to_deduction())
 			}
 		}
 	}
@@ -151,22 +299,20 @@ impl_to_deduct!(SchemaExtract);
 impl_to_deduct!(SchemaIntro);
 impl_to_deduct!(Sequence);
 impl_to_deduct!(Let);
-//impl_to_deduct!(LambdaSubst);
 impl_to_deduct!(ExpSubstReduction);
 impl_to_deduct!(FormSubstReduction);
 impl_to_deduct!(LambdaInstIntro);
 impl_to_deduct!(LambdaSeqInstIntro);
 
-#[derive(Clone)]
-pub struct IFFIntro { thm: formula::IFF, w1: Work, w2: Work }
+
 
 
 impl IFFIntro {
-	pub fn new(thm: formula::IFF, w1: Work, w2: Work) -> IFFIntro {
+	pub fn new(thm: formula::IFF, w1: Deduction, w2: Deduction) -> IFFIntro {
 		IFFIntro {
 			thm: thm,
-			w1: w1,
-			w2: w2
+			w1: w1.ptr(),
+			w2: w2.ptr()
 		}
 	}
 
@@ -202,15 +348,11 @@ impl IFFIntro {
 }
 
 
-#[derive(Clone)]
-pub struct SubstIntro { thm: formula::ExpSubst, w: Work }
-
-
 impl SubstIntro {
-	pub fn new(thm: formula::ExpSubst, w: Work) -> SubstIntro {
+	pub fn new(thm: formula::ExpSubst, w: Deduction) -> SubstIntro {
 		SubstIntro {
 			thm: thm,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -233,17 +375,12 @@ impl SubstIntro {
 	}
 }
 
-
-
-#[derive(Clone)]
-pub struct IFFExtract{ thm: formula::IFF, w: Work }
-
 impl IFFExtract {
 
-	pub fn new(thm: formula::IFF, w: Work) -> IFFExtract {
+	pub fn new(thm: formula::IFF, w: Deduction) -> IFFExtract {
 		IFFExtract {
 			thm: thm,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -269,15 +406,14 @@ impl IFFExtract {
 	}
 }
 
-#[derive(Clone)]
-pub struct SubstExtract{ thm: formula::ExpSubst, w: Work }
+
 
 impl SubstExtract {
 
-	pub fn new(thm: formula::ExpSubst, w: Work) -> SubstExtract {
+	pub fn new(thm: formula::ExpSubst, w: Deduction) -> SubstExtract {
 		SubstExtract {
 			thm: thm,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -299,16 +435,15 @@ impl SubstExtract {
 	}
 }
 
-#[derive(Clone)]
-pub struct AndIntro { thm: formula::And, w1: Work, w2: Work }
+
 
 impl AndIntro {
 
-	pub fn new(thm: formula::And, w1: Work, w2: Work) -> AndIntro {
+	pub fn new(thm: formula::And, w1: Deduction, w2: Deduction) -> AndIntro {
 		AndIntro {
 			thm: thm,
-			w1: w1,
-			w2: w2
+			w1: w1.ptr(),
+			w2: w2.ptr()
 		}
 	}
 
@@ -339,16 +474,14 @@ impl AndIntro {
 	}
 }
 
-#[derive(Clone)]
-pub struct OrIntro { thm: formula::Or, w1: Work, w2: Work }
 
 impl OrIntro {
 
-	pub fn new(thm: formula::Or, w1: Work, w2: Work) -> OrIntro {
+	pub fn new(thm: formula::Or, w1: Deduction, w2: Deduction) -> OrIntro {
 		OrIntro {
 			thm: thm,
-			w1: w1,
-			w2: w2
+			w1: w1.ptr(),
+			w2: w2.ptr()
 		}
 	}
 
@@ -380,15 +513,12 @@ impl OrIntro {
 	}
 }
 
-#[derive(Clone)]
-pub struct AndExtract {thm: formula::And, w: Work }
-
 impl AndExtract {
 
-	pub fn new(thm: formula::And, w: Work) -> AndExtract {
+	pub fn new(thm: formula::And, w: Deduction) -> AndExtract {
 		AndExtract {
 			thm: thm,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -406,26 +536,21 @@ impl AndExtract {
 	}
 }
 
-
-#[derive(Clone)]
-pub struct OrExtract { 
-	thm: formula::Or, 
-	to_thm: formula::FormPtr,
-	w1: Work, 
-	w2: Work, 
-	w3: Work
-}
-
 impl OrExtract {
 
-	pub fn new(thm: formula::Or, to_thm: formula::Formula, w1: Work, w2: Work, w3: Work) 
+	pub fn new(
+		thm: formula::Or, 
+		to_thm: formula::Formula, 
+		w1: Deduction, 
+		w2: Deduction, 
+		w3: Deduction) 
 	-> OrExtract {
 		OrExtract {
 			thm: thm,
 			to_thm: to_thm.ptr(),
-			w1: w1,
-			w2: w2,
-			w3: w3
+			w1: w1.ptr(),
+			w2: w2.ptr(),
+			w3: w3.ptr()
 		}
 	}
 
@@ -464,15 +589,12 @@ impl OrExtract {
 }
 
 
-#[derive(Clone)]
-pub struct ImplyIntro{ thm: formula::Implies, w: Work }
-
 impl ImplyIntro {
 
-	pub fn new(thm: formula::Implies, w: Work) -> ImplyIntro {
+	pub fn new(thm: formula::Implies, w: Deduction) -> ImplyIntro {
 		ImplyIntro {
 			thm: thm,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -481,9 +603,9 @@ impl ImplyIntro {
 		let assume = kbase.result_ptr(self.thm.left.clone());
 		match self.w.deduce(&assume) {
 			Ok(_k) => {
-				let k = kbase
-					.result_ptr(self.thm.left.clone())
-					.result_ptr(self.thm.right.clone());
+				let k = kbase.result_form(self.thm.clone().to_form());
+					//.result_ptr(self.thm.left.clone())
+					//.result_ptr(self.thm.right.clone());
 				Ok(k)
 			}
 			e => e
@@ -491,16 +613,13 @@ impl ImplyIntro {
 	}
 }
 
-#[derive(Clone)]
-pub struct ImplyExtract { thm: formula::Implies, w1: Work, w2: Work }
-
 impl ImplyExtract {
 
-	pub fn new(thm: formula::Implies, w1: Work, w2: Work) -> ImplyExtract {
+	pub fn new(thm: formula::Implies, w1: Deduction, w2: Deduction) -> ImplyExtract {
 		ImplyExtract {
 			thm: thm,
-			w1: w1,
-			w2: w2
+			w1: w1.ptr(),
+			w2: w2.ptr()
 		}
 	}
 
@@ -532,15 +651,12 @@ impl ImplyExtract {
 }
 
 
-#[derive(Clone)]
-pub struct NegationIntro {thm: formula::Not, w: Work }
-
 impl NegationIntro {
 
-	pub fn new(thm: formula::Not, w: Work) -> NegationIntro {
+	pub fn new(thm: formula::Not, w: Deduction) -> NegationIntro {
 		NegationIntro {
 			thm: thm,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -559,16 +675,13 @@ impl NegationIntro {
 	}
 }
 
-#[derive(Clone)]
-pub struct NegationExtract { thm: formula::Not, w1: Work, w2: Work }
-
 impl NegationExtract {
 
-	pub fn new(thm: formula::Not, w1: Work, w2: Work) -> NegationExtract {
+	pub fn new(thm: formula::Not, w1: Deduction, w2: Deduction) -> NegationExtract {
 		NegationExtract {
 			thm: thm,
-			w1: w1,
-			w2: w2
+			w1: w1.ptr(),
+			w2: w2.ptr()
 		}
 	}
 
@@ -596,25 +709,12 @@ impl NegationExtract {
 	}
 }
 
-#[derive(Clone)]
-pub struct EqualityIntro(expr::Singular);
-
 impl EqualityIntro {
 	pub fn deduce<K: KnowledgeBase>(&self, kbase: &ResultBase<K>) 
 	-> DResult<K>  {
 		let form = formula::Eq::new(self.0.clone(), self.0.clone()).to_form();
 		Ok(kbase.result_form(form))
 	}
-}
-
-#[derive(Clone)]
-pub struct Substitution { 
-	t1: expr::Singular, 
-	t2: expr::Singular,
-	c: expr::Free,
-	form: formula::Formula, 
-	w1: Work, 
-	w2: Work
 }
 
 impl Substitution {
@@ -624,16 +724,16 @@ impl Substitution {
 		t2: expr::Singular,
 		c: expr::Free,
 		form: formula::Formula, 
-		w1: Work, 
-		w2: Work) 
+		w1: Deduction, 
+		w2: Deduction) 
 	-> Substitution {
 		Substitution {
 			t1: t1,
 			t2: t2,
 			c: c,
 			form: form, 
-			w1: w1, 
-			w2: w2
+			w1: w1.ptr(), 
+			w2: w2.ptr()
 		}
 	}
 
@@ -670,20 +770,13 @@ impl Substitution {
 	}
 }
 
-#[derive(Clone)]
-pub struct ForAllSeqExtract {
-	thm: formula::ForAllSeq,
-	sub: expr::SeqVar,  
-	w: Work
-}
-
 impl ForAllSeqExtract {
 
-	pub fn new(thm: formula::ForAllSeq, sub: expr::SeqVar, w: Work) -> ForAllSeqExtract {
+	pub fn new(thm: formula::ForAllSeq, sub: expr::SeqVar, w: Deduction) -> ForAllSeqExtract {
 		ForAllSeqExtract {
 			thm: thm,
 			sub: sub,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -702,20 +795,14 @@ impl ForAllSeqExtract {
 	}
 }
 
-#[derive(Clone)]
-pub struct ForAllExtract{
-	thm: formula::ForAll, 
-	sub: expr::Singular,
-	w: Work
-}
 
 impl ForAllExtract {
 
-	pub fn new(thm: formula::ForAll, sub: expr::Singular, w: Work) -> ForAllExtract {
+	pub fn new(thm: formula::ForAll, sub: expr::Singular, w: Deduction) -> ForAllExtract {
 		ForAllExtract {
 			thm: thm,
 			sub: sub,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -735,21 +822,14 @@ impl ForAllExtract {
 }
 
 
-#[derive(Clone)]
-pub struct ForAllSeqIntro {
-	thm: formula::ForAllSeq,
-	letv: expr::ArbSeq,
-	w: Work
-}
-
 impl ForAllSeqIntro {
 
-	pub fn new(thm: formula::ForAllSeq, letv: expr::ArbSeq, w: Work) 
+	pub fn new(thm: formula::ForAllSeq, letv: expr::ArbSeq, w: Deduction) 
 	-> ForAllSeqIntro {
 		ForAllSeqIntro {
 			thm: thm,
 			letv: letv,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -775,20 +855,13 @@ impl ForAllSeqIntro {
 	}
 }
 
-#[derive(Clone)]
-pub struct ForAllIntro {
-	thm: formula::ForAll,
-	letv: expr:: Arb,
-	w: Work
-}
-
 impl ForAllIntro {
 
-	pub fn new(thm: formula::ForAll, letv: expr::Arb, w: Work) -> ForAllIntro {
+	pub fn new(thm: formula::ForAll, letv: expr::Arb, w: Deduction) -> ForAllIntro {
 		ForAllIntro {
 			thm: thm,
 			letv,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -813,20 +886,13 @@ impl ForAllIntro {
 	}
 }
 
-#[derive(Clone)]
-pub struct ExistsIntro {
-	thm: formula::Exists,
-	var: expr::Singular,
-	w: Work
-}
-
 impl ExistsIntro {
 
-	pub fn new(thm: formula::Exists, var: expr::Singular, w: Work) -> ExistsIntro {
+	pub fn new(thm: formula::Exists, var: expr::Singular, w: Deduction) -> ExistsIntro {
 		ExistsIntro {
 			thm: thm,
 			var: var,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -847,20 +913,13 @@ impl ExistsIntro {
 	}
 }
 
-#[derive(Clone)]
-pub struct ExistsExtract {
-	thm: formula::Exists,
-	var: expr::Const,
-	w: Work
-}
-
 impl ExistsExtract {
 
-	pub fn new(thm: formula::Exists, var: expr::Const, w: Work) -> ExistsExtract {
+	pub fn new(thm: formula::Exists, var: expr::Const, w: Deduction) -> ExistsExtract {
 		ExistsExtract {
 			thm: thm,
 			var: var,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -882,20 +941,13 @@ impl ExistsExtract {
 	}
 }
 
-#[derive(Clone)]
-pub struct SchemaExtract { 
-	thm: formula::Schema, 
-	form: formula::Formula, 
-	w: Work
-}
-
 impl SchemaExtract {
 
-	pub fn new(thm: formula::Schema, form: formula::Formula, w: Work) -> SchemaExtract {
+	pub fn new(thm: formula::Schema, form: formula::Formula, w: Deduction) -> SchemaExtract {
 		SchemaExtract {
 			thm: thm,
 			form: form,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -914,20 +966,13 @@ impl SchemaExtract {
 	}
 }
 
-#[derive(Clone)]
-pub struct SchemaIntro {
-	thm: formula::Schema,
-	letv: formula::Arb,
-	w: Work
-}
-
 impl SchemaIntro {
 
-	pub fn new(thm: formula::Schema, letv: formula::Arb, w: Work) -> SchemaIntro {
+	pub fn new(thm: formula::Schema, letv: formula::Arb, w: Deduction) -> SchemaIntro {
 		SchemaIntro {
 			thm: thm,
 			letv: letv,
-			w: w
+			w: w.ptr()
 		}
 	}
 
@@ -953,13 +998,20 @@ impl SchemaIntro {
 	}
 }
 
-#[derive(Clone)]
-pub struct Sequence(Work, Work);
-
 impl Sequence {
 
-	pub fn new(w1: Work, w2: Work) -> Sequence {
-		Sequence(w1, w2)
+	pub fn new(w1: Deduction, w2: Deduction) -> Sequence {
+		Sequence(w1.ptr(), w2.ptr())
+	}
+
+	pub fn cons(w1: Deduction, w2: Deduction) -> Deduction {
+		match w1 {
+			Deduction::EmptyStep => w2,
+			w1 => match w2 {
+				Deduction::EmptyStep => w1,
+				w2 => Sequence(w1.ptr(), w2.ptr()).to_deduction()
+			}
+		}
 	}
 
 	pub fn deduce<K: KnowledgeBase>(&self, kbase: &ResultBase<K>) 
@@ -974,13 +1026,10 @@ impl Sequence {
 	}
 }
 
-#[derive(Clone)]
-pub struct Let(String, expr::Singular);
-
 impl Let {
 
-	pub fn new(w1: String, w2: expr::Singular) -> Let {
-		Let(w1, w2)
+	pub fn new(v: String, s: expr::Singular, w: Deduction) -> Let {
+		Let(v, s, w.ptr())
 	}
 
 	pub fn deduce<K: KnowledgeBase>(&self, kbase: &ResultBase<K>) 
@@ -992,25 +1041,20 @@ impl Let {
 		} else {
 			let k = kbase.result_const(c.clone())
 				.result_form(formula::Eq::new(c.to_singular(), self.1.clone()).to_form());
-			Ok(k)
+			match self.2.deduce(&k) {
+				Ok(k) => Ok(k.remove_const(&self.0)),
+				k => k
+			}			
 		}
 	}
-}
-
-
-
-#[derive(Clone)]
-pub struct ExpSubstReduction {
-	thm: formula::ExpSubst, 
-	work: Work
 }
 
 impl ExpSubstReduction {
 
-	pub fn new(thm: formula::ExpSubst, 	work: Work) -> ExpSubstReduction {
+	pub fn new(thm: formula::ExpSubst, 	work: Deduction) -> ExpSubstReduction {
 		ExpSubstReduction {
 			thm: thm,
-			work: work
+			work: work.ptr()
 		}
 	}
 
@@ -1027,20 +1071,14 @@ impl ExpSubstReduction {
 			e => e
 		}
 	}
-}
-
-#[derive(Clone)]
-pub struct FormSubstReduction {
-	thm: formula::FormSubst, 
-	work: Work
 }
 
 impl FormSubstReduction {
 
-	pub fn new(thm: formula::FormSubst, 	work: Work) -> FormSubstReduction {
+	pub fn new(thm: formula::FormSubst, work: Deduction) -> FormSubstReduction {
 		FormSubstReduction {
 			thm: thm,
-			work: work
+			work: work.ptr()
 		}
 	}
 
@@ -1059,25 +1097,14 @@ impl FormSubstReduction {
 	}
 }
 
-//#[derive(Clone)]
-//pub struct LambdaSubst(formula::Formula, String, expr::LambdaInst, Work);
-
-#[derive(Clone)]
-pub struct LambdaInstIntro	{
-	v: expr::Singular,
-	inst: expr::LambdaInst,
-	work: Work
-}
-
-
 impl LambdaInstIntro {
 
-	pub fn new(v: expr::Singular, inst: expr::LambdaInst, work: Work) 
+	pub fn new(v: expr::Singular, inst: expr::LambdaInst, work: Deduction) 
 	-> LambdaInstIntro {
 		LambdaInstIntro {
 			v: v,
 			inst: inst,
-			work: work
+			work: work.ptr()
 		}
 	}
 
@@ -1100,22 +1127,15 @@ impl LambdaInstIntro {
 }
 
 
-#[derive(Clone)]
-pub struct LambdaSeqInstIntro	{
-	v: expr::Singular,
-	inst: expr::LambdaSeqInst,
-	work: Work
-}
-
 
 impl LambdaSeqInstIntro {
 
-	pub fn new(v: expr::Singular, inst: expr::LambdaSeqInst, work: Work) 
+	pub fn new(v: expr::Singular, inst: expr::LambdaSeqInst, work: Deduction) 
 	-> LambdaSeqInstIntro {
 		LambdaSeqInstIntro {
 			v: v,
 			inst: inst,
-			work: work
+			work: work.ptr()
 		}
 	}
 

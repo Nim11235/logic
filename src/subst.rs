@@ -32,6 +32,14 @@ pub trait Substitute {
 }
 
 impl Expr {
+	pub fn sub_str(name: &str, s: Singular) -> Expr {
+		Expr::Singular(Free::from_str(name), s)
+	}
+
+	pub fn sub_free(name: Free, s: Singular) -> Expr {
+		Expr::Singular(name, s)
+	}
+
 	pub fn append_finfo<'a, K>(&'a self, info: &'a FInfo<'a, K>) -> FInfo<'a, K> 
 	where
 		K: ContextBase
@@ -185,6 +193,8 @@ impl Expr {
 }
 
 impl Info {
+
+
 	pub fn replaces(&self, name: &Free) -> bool {
 		match self {
 			Info::Expr(Expr::Singular(f, _)) => PartialEq::eq(f, name),
