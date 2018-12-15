@@ -1,5 +1,7 @@
 use std::ops::Deref;
 use std::convert::Into;
+use std::cmp::max;
+use std::string::ToString;
 
 use expr;
 use subst;
@@ -40,7 +42,7 @@ pub struct Relation(String, Vec<expr::Expr>);
 #[derive(Clone, PartialEq)]
 pub struct Not { pub form: FormPtr }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct ExpSubst { form: FormPtr, sub: subst::Expr }
 
 #[derive(Clone, PartialEq)]
@@ -49,7 +51,7 @@ pub struct Free { var: FormName }
 #[derive(Clone, PartialEq)]
 pub struct Arb { var: FormName }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct Schema {
 	pub var: Free, 
 	pub form: FormPtr
@@ -63,19 +65,23 @@ pub enum FormName {
 	Subbed(usize)
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct ForAllSeq { 
 	pub var: expr::FreeSeq, 
 	pub form: FormPtr 
 
 }
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
 pub struct FormSubst { 
 	form: FormPtr, 
 	var: Free, 
 	sub: FormPtr
 }
 
+macro_rules! max {
+	($x: expr) => ($x);
+	($x:expr, $($y:expr),+) => { std::cmp::max($x, max!($($y),+)) };
+}
 
 macro_rules! to_form_impl {
 	($struct: ident) => {
@@ -96,12 +102,13 @@ macro_rules! bin_string {
 macro_rules! binform_impl {
 	($form: ident) => {
 
-		#[derive(Clone, PartialEq)]
+		#[derive(Clone)]
 		pub struct $form { pub left: FormPtr, pub right: FormPtr }
 
 		to_form_impl!($form);
 
 		impl $form {
+
 			pub fn new(left: Formula, right: Formula) -> $form {
 				$form { left: left.ptr(), right: right.ptr() }
 			}
@@ -140,11 +147,45 @@ macro_rules! binform_impl {
 					right: b
 				})
 			}
+
+			pub fn eq(&self, rhs: &$form) -> bool {
+				self.bin_seq().iter()
+					.zip(rhs.bin_seq().iter())
+					.all(|(a, b)| { PartialEq::eq(a, b) })
+			}
+
+			pub fn bin_seq<'a>(&'a self) -> Vec<&'a Formula> {
+				let mut v = vec!();
+				
+				fn recurse<'a>(form: &'a Formula, v: &mut Vec<&'a Formula>) {
+					match form {
+						Formula::$form(f) => {
+							recurse(f.left.deref(), v);
+							recurse(f.right.deref(),v );
+						},
+						f => { v.push(f) }
+					}
+				}
+
+				recurse(self.left.deref(), &mut v);
+				recurse(self.right.deref(), &mut v);
+
+				v
+			}
+		}
+
+		impl PartialEq<$form> for $form {
+			fn eq(&self, rhs: &$form) -> bool {
+				$form::eq(self, rhs)
+			}
 		}
 
 		impl ToString for $form {
 			fn to_string(&self) -> String {
-				format!("{}({}, {})", bin_string!($form).to_owned(), "", "")
+				format!("{}({}, {})", 
+					bin_string!($form).to_owned(), 
+					self.left.to_string(), 
+					self.right.to_string())
 			}
 		}
 	}
@@ -153,7 +194,7 @@ macro_rules! binform_impl {
 macro_rules! quant_impl {
 	($quant: ident) => {
 
-		#[derive(Clone, PartialEq)]
+		#[derive(Clone)]
 		pub struct $quant { pub var: expr::Free, pub form: FormPtr }
 
 		to_form_impl!($quant);
@@ -204,8 +245,6 @@ macro_rules! quant_impl {
 			
 			pub fn well_formed<'a, K: ContextBase>(&self, info: &FInfo<'a, K>) 
 			-> bool {
-				//let c = expr::Const::Singular(self.var.clone());
-				//let k = kbase::LinkedBase::Const(&c, kbase);
 				self.form.well_formed(&info.append_free(&self.var))
 			}
 
@@ -214,7 +253,30 @@ macro_rules! quant_impl {
 			}
 
 			pub fn max_sub_index(&self) -> usize {
-				std::cmp::max(self.var.max_sub_index(), self.form.max_sub_index())
+				max(self.var.max_sub_index(), self.form.max_sub_index())
+			}
+
+			pub fn eq(&self, rhs: &$quant) -> bool {
+				let i = max(self.max_sub_index(), rhs.max_sub_index());
+				let name = expr::Free::from_int(i + 1);
+				let sub1 = subst::Expr::Singular(self.var.clone(), name.clone().to_singular());
+				let sub2 = subst::Expr::Singular(rhs.var.clone(), name.to_singular());
+				self.form.substitute(&sub1.to_form()) == rhs.form.substitute(&sub2.to_form())
+			}
+		}
+		
+		impl ToString for $quant {
+			fn to_string(&self) -> String {
+				format!("{} {} [{}]", 
+					stringify!($quant), 
+					self.var.to_string(),
+					self.form.to_string())
+			}
+		}
+
+		impl PartialEq<$quant> for $quant {
+			fn eq(&self, rhs: &$quant) -> bool {
+				$quant::eq(self, rhs)
 			}
 		}
 	}
@@ -372,6 +434,30 @@ impl Formula {
 	}
 }
 
+impl ToString for Formula {
+	fn to_string(&self) -> String { 
+		match self {
+			Formula::True         => "true".to_string(),
+			Formula::False        => "false".to_string(),
+			Formula::IFF(f)       => f.to_string(),
+			Formula::Relation(f)  => f.to_string(),
+			Formula::And(f)       => f.to_string(),
+			Formula::Or(f)        => f.to_string(),
+			Formula::Not(f)       => f.to_string(),
+			Formula::Implies(f)   => f.to_string(),
+			Formula::ExpSubst(f)  => f.to_string(),
+			Formula::FormSubst(f) => f.to_string(),
+			Formula::ForAllSeq(f) => f.to_string(),
+			Formula::ForAll(f)    => f.to_string(),
+			Formula::Exists(f)    => f.to_string(),
+			Formula::Free(f)      => f.to_string(),
+			Formula::Arb(f)       => f.to_string(),
+			Formula::Schema(f)    => f.to_string(),
+			Formula::Eq(f)        => f.to_string(),
+		}
+	}
+}
+
 impl Into<Formula> for bool {
 	fn into(self) -> Formula {
 		if self {
@@ -431,7 +517,43 @@ impl ExpSubst {
 				sub: self.sub.clone(), 
 				form: self.form.substitute(info).ptr()
 			},
-		}		
+		}	
+	}
+
+	pub fn eq(&self, rhs: &ExpSubst) -> bool {
+		match (&self.sub, &rhs.sub) {
+			(subst::Expr::Singular(f1, s1), subst::Expr::Singular(f2, s2)) => {
+				if s1 == s2 {
+					let i = max!(
+						f1.max_sub_index(), 
+						s1.max_sub_index(),
+						f2.max_sub_index(), 
+						s2.max_sub_index());
+					let name = expr::Free::from_int(i + 1).to_singular();
+					let sub1 = subst::Expr::Singular(f1.clone(), name.clone()).to_form();
+					let sub2 = subst::Expr::Singular(f2.clone(), name).to_form();
+					self.form.substitute(&sub1) == rhs.form.substitute(&sub2)
+				} else {
+					false
+				}
+			},
+			(subst::Expr::Seq(f1, s1), subst::Expr::Seq(f2, s2)) => {
+				if s1 == s2 && f1.arity() == f2.arity() {
+					let i = max!(
+						f1.max_sub_index(), 
+						s1.max_sub_index(),
+						f2.max_sub_index(), 
+						s2.max_sub_index());
+					let name = expr::FreeSeq::from_int(i + 1, f1.arity()).to_seq();
+					let sub1 = subst::Expr::Seq(f1.clone(), name.clone()).to_form();
+					let sub2 = subst::Expr::Seq(f2.clone(), name).to_form();
+					self.form.substitute(&sub1) == rhs.form.substitute(&sub2)
+				} else {
+					false
+				}
+			},
+			_ => false
+		}
 	}
 
 
@@ -453,8 +575,17 @@ impl ExpSubst {
 	}
 }
 
+impl PartialEq<ExpSubst> for ExpSubst {
+	fn eq(&self, rhs: &ExpSubst) -> bool {
+		ExpSubst::eq(self, rhs) 
+	}
+}
+
 impl ToString for ExpSubst {
-	fn to_string(&self) -> String { String::new() }
+	fn to_string(&self) -> String { 
+		format!("{}[{}]", self.form.to_string(), self.sub.to_string())
+
+	}
 }
 
 impl FormName {
@@ -479,6 +610,15 @@ impl FormName {
 
 	pub fn to_form(&self) -> Formula {
 		Formula::Free(Free::new(self.clone()))
+	}
+}
+
+impl ToString for FormName {
+	fn to_string(&self) -> String {
+		match self {
+			FormName::String(s) => { s.clone() },
+			FormName::Subbed(i) => { format!("f{}", i) }
+		}
 	}
 }
 
@@ -544,6 +684,30 @@ impl ForAllSeq {
 		let info = EInfo::Seq(self.var.clone(), exp.clone()).to_form();
 		self.form.substitute(&info)
 	}
+
+	pub fn eq(&self, rhs: &ForAllSeq) -> bool {
+		if self.var.arity() == rhs.var.arity() {
+			let i = max(self.var.max_sub_index(), rhs.var.max_sub_index());
+			let name = expr::FreeSeq::from_int(i + 1, self.var.arity()).to_seq();
+			let sub1 = subst::Expr::Seq(self.var.clone(), name.clone()).to_form();
+			let sub2 = subst::Expr::Seq(rhs.var.clone(), name).to_form();
+			self.form.substitute(&sub1) == rhs.form.substitute(&sub2)
+		} else {
+			false
+		}
+	}
+}
+
+impl ToString for ForAllSeq {
+	fn to_string(&self) -> String {
+		format!("forall* {} [{}]", self.var.to_string(), self.form.to_string())
+	}
+}
+
+impl PartialEq<ForAllSeq> for ForAllSeq {
+	fn eq(&self, rhs: &ForAllSeq) -> bool {
+		ForAllSeq::eq(self, rhs)
+	}
 }
 
 impl FormSubst {
@@ -591,11 +755,43 @@ impl FormSubst {
 		let t1 = self.form.max_form_sub_index();
 		let t2 = self.var.max_form_sub_index();
 		let t3 = self.sub.max_form_sub_index();
-		std::cmp::max(std::cmp::max(t1, t2), t3)
+		max!(t1, t2, t3)
 	}
 
 	pub fn max_sub_index(&self) -> usize {
 		std::cmp::max(self.form.max_sub_index(), self.sub.max_sub_index())
+	}
+
+	pub fn eq(&self, rhs: &FormSubst) -> bool {
+		if self.sub == rhs.sub {
+			let i = max!(
+				self.var.max_form_sub_index(), 
+				rhs.var.max_form_sub_index(),
+				self.form.max_form_sub_index(),
+				rhs.form.max_form_sub_index());
+			let name = FormName::from_int(i + 1).to_form();
+			let sub1 = subst::Info::Formula(self.var.clone(), name.clone());
+			let sub2 = subst::Info::Formula(rhs.var.clone(), name);
+			self.form.substitute(&sub1) == rhs.form.substitute(&sub2)
+		} else {
+			false
+		}
+	}
+}
+
+impl ToString for FormSubst {
+	fn to_string(&self) -> String { 
+		format!("{}[{} <<== {}]", 
+			self.form.to_string(),
+			self.var.to_string(),
+			self.sub.to_string())
+
+	}
+}
+
+impl PartialEq<FormSubst> for FormSubst {
+	fn eq(&self, rhs: & FormSubst) -> bool {
+		FormSubst::eq(self, rhs)
 	}
 }
 
@@ -664,8 +860,31 @@ impl Schema {
 	pub fn max_sub_index(&self) -> usize {
 		 self.form.max_sub_index()
 	}
+
+	pub fn eq(&self, rhs: &Schema) -> bool {
+		let i = max!(
+			self.var.max_form_sub_index(), 
+			rhs.var.max_form_sub_index(),
+			self.form.max_form_sub_index(), 
+			rhs.form.max_form_sub_index());
+		let name = FormName::from_int(i + 1).to_form();
+		let sub1 = subst::Info::Formula(self.var.clone(), name.clone());
+		let sub2 = subst::Info::Formula(rhs.var.clone(), name);
+		self.form.substitute(&sub1) == rhs.form.substitute(&sub2)
+	}
 }
 
+impl ToString for Schema {
+	fn to_string(&self) -> String {
+		format!("schema {} [{}]", self.var.to_string(), self.form.to_string())
+	}
+}
+
+impl PartialEq<Schema> for Schema {
+	fn eq(&self, rhs: &Schema) -> bool {
+		Schema::eq(self, rhs)
+	}
+}
 
 impl Relation {
 	pub fn new(name: String, vars: Vec<expr::Expr>) -> Relation {
@@ -697,6 +916,17 @@ impl Relation {
 
 	pub fn max_sub_index(&self) -> usize {
 		self.1.iter().map(|x| x.max_sub_index()).max().unwrap()
+	}
+}
+
+impl ToString for Relation {
+	fn to_string(&self) -> String {
+		format!("{}({})", 
+			self.0.to_string(),
+			self.1.iter()
+				.map(|x| { x.to_string() })
+				.collect::<Vec<String>>()
+				.join(", "))
 	}
 }
 
@@ -734,6 +964,12 @@ impl Arb {
 
 	pub fn max_sub_index(&self) -> usize {
 		0
+	}
+}
+
+impl ToString for Arb {
+	fn to_string(&self) -> String {
+		self.var.to_string()
 	}
 }
 
@@ -802,6 +1038,13 @@ impl Free {
 	}
 }
 
+impl ToString for Free {
+	fn to_string(&self) -> String {
+		self.var.to_string()
+	}
+}
+
+
 impl Into<Free> for String {
 	fn into(self) -> Free {
 		Free::from_string(self)
@@ -842,6 +1085,12 @@ impl Not {
 	}
 }
 
+impl ToString for Not {
+	fn to_string(&self) -> String {
+		format!("not({})", self.form.to_string())
+	}
+}
+
 impl Eq {
 
 	pub fn expand(&self) -> Eq {
@@ -871,6 +1120,10 @@ impl Eq {
 	}
 }
 
-impl std::string::ToString for Formula {
-	fn to_string(&self) -> String { String::new() }
+impl ToString for Eq {
+	fn to_string(&self) -> String {
+		format!("{} = {}", self.0.to_string(), self.1.to_string())
+	}
 }
+
+

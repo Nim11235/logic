@@ -162,6 +162,15 @@ impl Expr {
 	}
 }
 
+impl ToString for Expr {
+	fn to_string(&self) -> String {
+		match self {
+			Expr::Singular(s) => s.to_string(),
+			Expr::Seq(s) => s.to_string(),
+		}
+	}
+}
+
 impl Into<Expr> for String {
 	fn into(self) -> Expr {
 		Singular::Const(Const::from_string(self)).to_expr()
@@ -278,6 +287,35 @@ impl Singular {
 	}
 }
 
+impl ToString for Singular {
+	fn to_string(&self) -> String {
+		match self {
+			Singular::Head(b) => format!("head({})", b.to_string()),
+			Singular::Composite(name, exps) => {
+				/*let iter = exps.iter();
+				let mut names = String::new();
+				names.push_str(iter.next().unwrap().to_string().as_str());
+				for a in iter {
+					names.push_str(", ");
+					names.push_str(a.to_string().as_str())
+				}*/				
+				format!(
+					"{}({})",
+					name.to_string(), 
+					exps.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", "))
+			},
+			Singular::Const(a) => a.to_string(),
+			Singular::Lambda(l) => l.to_string(),
+			Singular::LambdaInst(l) => l.to_string(),
+			Singular::LambdaSeq(l) => l.to_string(),
+			Singular::LambdaSeqInst(l) => l.to_string(),
+			Singular::Free(f) => f.to_string(),
+			Singular::Arb(a) => a.to_string(),
+			Singular::Formula(f) => f.to_string(),
+		}
+	}
+}
+
 impl Into<Singular> for String {
 	fn into(self) -> Singular {
 		Singular::Const(Const::from_string(self))
@@ -338,6 +376,12 @@ impl SeqConst {
 	}
 }
 
+impl ToString for SeqConst {
+	fn to_string(&self) -> String {
+		format!("{}..{}", self.name.to_string(), self.arity)
+	}
+}
+
 impl Into<SeqConst> for (String, usize) {
 	fn into(self) -> SeqConst {
 		SeqConst::from_string(self.0, self.1)
@@ -377,6 +421,15 @@ impl ConstName {
 
 	pub fn to_singular(&self) -> Singular {
 		Singular::Const(Const(self.clone()))
+	}
+}
+
+impl ToString for ConstName {
+	fn to_string(&self) -> String {
+		match self {
+			ConstName::String(s) => { s.clone() },
+			ConstName::Subbed(i) => { format!("c{}", i) }
+		}
 	}
 }
 
@@ -430,6 +483,12 @@ impl Arb {
 	}
 }
 
+impl ToString for Arb {
+	fn to_string(&self) -> String {
+		format!("&{}", self.0.to_string())
+	}
+}
+
 impl Into<Arb> for String {
 	fn into(self) -> Arb {
 		Arb::from_string(self)
@@ -470,6 +529,12 @@ impl ArbSeq {
 
 	pub fn max_sub_index(&self) -> usize {
 		self.name.max_sub_index()
+	}
+}
+
+impl ToString for ArbSeq {
+	fn to_string(&self) -> String {
+		format!("&{}..{}", self.name.to_string(), self.arity)
 	}
 }
 
@@ -548,7 +613,7 @@ impl SeqVar {
 	}
 
 	pub fn well_formed<'a, K: ContextBase>(&self, info: &FInfo<'a, K>) 
-			-> bool {
+	-> bool {
 		match self {
 			SeqVar::Free(f) => info.has_free_seq(f),
 			SeqVar::Arb(f) => info.has_arb_seq(f),
@@ -577,6 +642,24 @@ impl SeqVar {
 			},
 			a => Err(a.clone())
 			
+		}
+	}
+}
+
+impl ToString for SeqVar {
+	fn to_string(&self) -> String {
+		match self {
+			SeqVar::Free(f) => f.to_string(),
+			SeqVar::Arb(f) => f.to_string(),
+			SeqVar::List(f) => {
+				format!("list({})",
+					f.iter()
+						.map(|x| x.to_string())
+						.collect::<Vec<String>>()
+						.join(", "))
+			},
+			SeqVar::Const(f) => f.to_string(),
+			SeqVar::Tail(f) => format!("tail({})", f.to_string())
 		}
 	}
 }
@@ -616,6 +699,13 @@ impl FreeSeq {
 		}
 	}
 
+	pub fn from_int(name: usize, arity: usize) -> FreeSeq {
+		FreeSeq {
+			name: ConstName::from_int(name),
+			arity: arity
+		}
+	}
+
 	pub fn replace_with(&self, i: usize) -> FreeSeq {
 		FreeSeq {
 			name: ConstName::Subbed(i),
@@ -627,13 +717,20 @@ impl FreeSeq {
 		SeqVar::Free(self)
 	}
 
+	pub fn arity(&self) -> usize {
+		self.arity
+	}
+
 	pub fn max_sub_index(&self) -> usize {
 		self.name.max_sub_index()
 	}
-
-
 }
 
+impl ToString for FreeSeq {
+	fn to_string(&self) -> String {
+		format!("*{}..{}", self.name.to_string(), self.arity)
+	}
+}
 
 impl Into<FreeSeq> for (String, usize) {
 	fn into(self) -> FreeSeq {
@@ -678,6 +775,12 @@ impl Free {
 	}
 }
 
+impl ToString for Free {
+	fn to_string(&self) -> String {
+		format!("*{}", self.0.to_string())
+	}
+}
+
 impl Into<Free> for String {
 	fn into(self) -> Free { Free::from_string(self) }
 }
@@ -709,6 +812,12 @@ impl Const {
 
 	pub fn from_cname(name: ConstName) -> Const {
 		Const(name)
+	}
+}
+
+impl ToString for Const {
+	fn to_string(&self) -> String {
+		format!("*{}", self.0.to_string())
 	}
 }
 
@@ -769,6 +878,12 @@ impl Lambda {
 	}
 }
 
+impl ToString for Lambda {
+	fn to_string(&self) -> String {
+		format!("lambda {} [{}]", self.var.to_string(), self.form.to_string())
+	}
+}
+
 impl LambdaSeq {
 
 	fn expand(&self) -> LambdaSeq {
@@ -803,6 +918,12 @@ impl LambdaSeq {
 		let u = self.form.max_sub_index();
 		let v = self.var.max_sub_index();
 		std::cmp::max(u, v)
+	}
+}
+
+impl ToString for LambdaSeq {
+	fn to_string(&self) -> String {
+		format!("lambda* {} [{}]", self.var.to_string(), self.form.to_string())
 	}
 }
 
@@ -868,6 +989,14 @@ impl LambdaInst {
 	}
 }
 
+impl ToString for LambdaInst {
+	fn to_string(&self) -> String {
+		format!("{}[{} <- {}]", 
+			self.lambda.form.to_string(), 
+			self.lambda.var.to_string(), 
+			self.sub.to_string())
+	}
+}
 
 impl LambdaSeqInst {
 
@@ -908,6 +1037,15 @@ impl LambdaSeqInst {
 			lambda: self.lambda.substitute(info), 
 			sub: Ptr::new(self.sub.substitute(info))
 		}
+	}
+}
+
+impl ToString for LambdaSeqInst {
+	fn to_string(&self) -> String {
+		format!("{}[{} <= {}]", 
+			self.lambda.form.to_string(), 
+			self.lambda.var.to_string(), 
+			self.sub.to_string())
 	}
 }
 

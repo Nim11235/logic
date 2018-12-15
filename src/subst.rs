@@ -192,6 +192,19 @@ impl Expr {
 	}
 }
 
+impl ToString for Expr {
+	fn to_string(&self) -> String {
+		match self {
+			Expr::Singular(f, s) => {
+				format!("{} <- {}", f.to_string(), s.to_string())
+			},
+			Expr::Seq(f, s) => {
+				format!("{} <= {}", f.to_string(), s.to_string())
+			},
+		}
+	}
+}
+
 impl Info {
 
 
@@ -294,6 +307,19 @@ impl Info {
 				expr::SeqVar::Free(name.clone())
 			},
 			_ => expr::SeqVar::Free(name.clone())
+		}
+	}
+}
+
+impl ToString for Info {
+	fn to_string(&self) -> String {
+		match self {
+			Info::Formula(f, s) => {
+				format!("{} <<== {}", f.to_string(), s.to_string())
+			},
+			Info::Expr(f) => {
+				f.to_string()
+			},
 		}
 	}
 }

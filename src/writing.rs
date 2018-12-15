@@ -1,6 +1,8 @@
 use formula;
 use formula::Formula;
 
+/// Macro used to import necessary name spaces for using macros in this
+/// module.
 #[macro_export]
 macro_rules! imports {
 	() => {
@@ -12,6 +14,8 @@ macro_rules! imports {
 	}
 }
 
+/// Creates an Or-formula with the given array of formulas.Formula
+/// This is a left-ordered tree, i.e. a or be or c === (a or b) or c
 pub fn get_or(l: Formula, r: Formula, forms: &[Formula]) -> formula::Or {
 	let f = formula::Or::new(l, r);
 	forms.iter().fold(f, |acc, x| { formula::Or::new(acc.to_form(), x.clone()) })
@@ -429,7 +433,7 @@ macro_rules! f {
 		{
 			let f = formula::ForAll::from_str(stringify!($v), ff!($($body)+));
 			[$(stringify!($rest),)+].iter().fold(f, |acc, &x| {
-				formula::ForAll::from_str(x, acc.to_form()).
+				formula::ForAll::from_str(x, acc.to_form())
 			})
 		}
 	};
@@ -877,6 +881,9 @@ macro_rules! d {
 	(_ $($rest:tt)+) => { 
 		d!($($rest)+)
 	};
+	({ $d:expr }) => {
+		$d
+	};
 	(_) => { deduction::Deduction::EmptyStep };
 	() => { deduction::Deduction::EmptyStep };
 }
@@ -886,8 +893,10 @@ macro_rules! dd {
 	($($t:tt)+) => ( d!($($t)+).to_deduction() )
 }
 
+
 /*
 pub fn test() {
+	imports!();
 	let l = s!({lambdaseq {s..2} {s}} <= {{("b", 2)}});
 	//let v = [var_list!(a, b, c, {"d"})];
 	//let f = f!({true} -> {false});
@@ -906,7 +915,7 @@ pub fn test() {
 		imply_extract {true} -> {false} {
 			_
 		} {
-			_
+			{ deduction::Deduction::EmptyStep }
 		}
 		and_extract and({f!(true)} {false} {true}) {
 			_
@@ -979,4 +988,5 @@ pub fn test() {
 	);
 	*/
 }
+
 */
