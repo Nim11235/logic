@@ -5,13 +5,20 @@ Library for checking formally constructed proofs.
 ## What This Library Has:
 Objects and classes representing Formlae and deductive steps. It also
 provides the necessary interfaces required to fully check a mathematical
-proof.
+proof. There are some extra structures that aren't usually considered in
+formal logic also included. Some non-standard structures are included; 
+Specifically some of the notable structures are 
+
+- Schemas: Universal second order logic (required by ZFC)
+- Sequential variables: Useful for defining inline set notation
+- ForAllSeq (For all finite, non-empty sequences): Useful for defining inline set notation.
+- Lambdas: Useful for defining functions within a theory.
 
 ## What This Library Does Not Have:
 This library is not an automated proving system: Proofs must be
 constructed either by hand or by some other system, and 
 knoweledge bases required for checking proofs are maintained by
-the client.
+the client. 
 
 # Examples:
 A number of examples exist in the [theorems][1] modules, which demonstrate
