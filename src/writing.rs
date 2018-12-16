@@ -1,29 +1,36 @@
-use formula;
-use formula::Formula;
+use formula::{Or, And, Formula};
 
 /// Macro used to import necessary name spaces for using macros in this
 /// module.
 #[macro_export]
 macro_rules! imports {
 	() => {
+		#[allow(unused_imports)]
 		use std::convert::Into;
+		#[allow(unused_imports)]
 		use formula;
+		#[allow(unused_imports)]
 		use expr;
+		#[allow(unused_imports)]
 		use deduction;
-		use subst;		
+		#[allow(unused_imports)]
+		use subst;
+		#[allow(unused_imports)]
+		use writing::{get_or, get_and};	
 	}
 }
 
+
 /// Creates an Or-formula with the given array of formulas.Formula
 /// This is a left-ordered tree, i.e. a or be or c === (a or b) or c
-pub fn get_or(l: Formula, r: Formula, forms: &[Formula]) -> formula::Or {
-	let f = formula::Or::new(l, r);
-	forms.iter().fold(f, |acc, x| { formula::Or::new(acc.to_form(), x.clone()) })
+pub fn get_or(l: Formula, r: Formula, forms: &[Formula]) -> Or {
+	let f = Or::new(l, r);
+	forms.iter().fold(f, |acc, x| { Or::new(acc.to_form(), x.clone()) })
 }
 
-pub fn get_and(l: Formula, r: Formula, forms: &[Formula]) -> formula::And {
-	let f = formula::And::new(l, r);
-	forms.iter().fold(f, |acc, x| { formula::And::new(acc.to_form(), x.clone()) })
+pub fn get_and(l: Formula, r: Formula, forms: &[Formula]) -> And {
+	let f = And::new(l, r);
+	forms.iter().fold(f, |acc, x| { And::new(acc.to_form(), x.clone()) })
 }
 
 #[macro_export]
@@ -177,11 +184,11 @@ macro_rules! expr_list {
 		$out.push(s!({$name}($($params)+)).to_expr());
 	};
 	($out:expr; $name:ident($($params:tt)+), $($more:tt)*) => {
-		$out.push(s!($name($($params)+)));
+		$out.push(s!($name($($params)+)).to_expr());
 		expr_list!($out; $($more)+);
 	};
 	($out:expr; $name:ident($($params:tt)+)) => {
-		$out.push(s!($name($($params)+)));
+		$out.push(s!($name($($params)+)).to_expr());
 	};
 	($out:expr; $name:ident..$ct:expr, $($more:tt)+) => { 
 		$out.push(SeqVar::free_str(stringify!($name), $ct).to_expr());
@@ -191,12 +198,12 @@ macro_rules! expr_list {
 		$out.push(SeqVar::free_str(stringify!($name), $ct).to_expr());
 	};
 	($out:expr; $name:ident, $($more:tt)+) => {
-		$out.push(Singular::const_str(stringify!($name)).to_expr());
+		$out.push(expr::Singular::const_str(stringify!($name)).to_expr());
 		expr_list!($out; $($more)+);
 	};
 	
 	($out:expr; $name:ident) => {
-		$out.push(Singular::arb_str(stringify!($name)).to_expr());
+		$out.push(expr::Singular::arb_str(stringify!($name)).to_expr());
 	};
 	
 }
@@ -769,7 +776,7 @@ macro_rules! d {
 	}};
 	(and_intro and($($f:tt)+) { $($body:tt)+ } { $($body2:tt)+ } $($stuff:tt)*) 
 	=> {{
-		let f = f!(and[$($f)+]);
+		let f = f!(and($($f)+));
 		let w1 = dd!($($body)+);
 		let w2 = dd!($($body2)+);
 		d_seq!(deduction::AndIntro::new(f, w1, w2); $($stuff)*)
@@ -796,14 +803,14 @@ macro_rules! d {
 		{$($form:tt)+}
 		{ $($body:tt)+ } 
 		{ $($body2:tt)+ }
-		{ $($body2:tt)+ } 
+		{ $($body3:tt)+ } 
 		$($stuff:tt)*) 
 	=> {{
-		let f = f!(and[$($f)+]);
+		let f = f!(or($($f)+));
 		let thm = ff!($($form)+);
 		let w1 = dd!($($body)+);
 		let w2 = dd!($($body2)+);
-		let w2 = dd!($($body3)+);
+		let w3 = dd!($($body3)+);
 		d_seq!(deduction::OrExtract::new(f, thm, w1, w2, w3); $($stuff)*)
 	}};
 	(and_extract and($($f:tt)+) { $($body:tt)+ } $($stuff:tt)*) 
@@ -814,7 +821,7 @@ macro_rules! d {
 	}};
 	(or_intro or($($f:tt)+) { $($body:tt)+ } { $($body2:tt)+ } $($stuff:tt)*) 
 	=> {{
-		let f = f!(or[$($f)+]);
+		let f = f!(or($($f)+));
 		let w1 = dd!($($body)+);
 		let w2 = dd!($($body2)+);
 		d_seq!(deduction::OrIntro::new(f, w1, w2); $($stuff)*)
@@ -897,14 +904,14 @@ macro_rules! dd {
 /*
 pub fn test() {
 	imports!();
-	let l = s!({lambdaseq {s..2} {s}} <= {{("b", 2)}});
+	let _l = s!({lambdaseq {s..2} {s}} <= {{("b", 2)}});
 	//let v = [var_list!(a, b, c, {"d"})];
 	//let f = f!({true} -> {false});
 	//let f = f!({true}[{"b"} => {true}]);	
-	let f: formula::And = f!(and({true} {false} {true}));
-	let f: formula::Not = f!(not(true));
+	let _f: formula::And = f!(and({true} {false} {true}));
+	let _f: formula::Not = f!(not(true));
 	//let f = f!(schema {{"b"} {"c"}} {true});
-	let a = d!(
+	let _a = d!(
 		lambda_seq_intro 
 			{s} 
 			{{lambdaseq {s..2} {s}} <= a..3} 
@@ -988,5 +995,4 @@ pub fn test() {
 	);
 	*/
 }
-
 */
