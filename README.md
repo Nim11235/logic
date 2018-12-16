@@ -24,6 +24,6 @@ See [here][3] for proofs of some standard properties of equality.
 See [here][2], where an in-software theorem and proof are constructed for 
 one part of DeMorgan's Law.
 
-[1]: https://github.com/Nim11235/ProofChecker/tree/master/Core/src/psy/theorems
-[2]: https://github.com/Nim11235/ProofChecker/blob/master/Core/src/psy/theorems/axiom/DeMorgan1.scala
-[3]: https://github.com/Nim11235/ProofChecker/blob/master/Core/src/psy/theorems/axiom/DeMorgan1.scala
+[1]: https://github.com/Nim11235/logic/tree/master/src/theorems
+[2]: https://github.com/Nim11235/logic/blob/master/src/theorems/de_morgan.rs
+[3]: https://github.com/Nim11235/logic/blob/master/src/theorems/equality.rs
