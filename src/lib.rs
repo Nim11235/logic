@@ -11,4 +11,3 @@ pub mod formula;
 pub mod knowledge_base;
 pub mod subst;
 pub mod theorems;
-

@@ -649,7 +649,7 @@ impl ImplyExtract {
 	}
 }
 
-
+// Proof by Contradiction: Assume P conclude False, therefore Not(P)
 impl NegationIntro {
 
 	pub fn new(thm: formula::Not, w: Deduction) -> NegationIntro {
